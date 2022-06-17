@@ -1,0 +1,142 @@
+---
+title: "RMD work pack"
+author: "Perfect Presenter"
+date: '2022-06-14'
+output: html_document
+---
+
+```{r map graphics}
+if (!require("usmap", quietly = TRUE)) install.packages("usmap")
+install.packages("BiocManager")
+
+library(usmap)
+library(stringr)
+library(ggplot2)
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+if("e1071" %in% rownames(installed.packages()) == FALSE) {
+  install.packages("e1071")}
+if("caTools" %in% rownames(installed.packages()) == FALSE) {
+  install.packages("caTools")}
+if("caret" %in% rownames(installed.packages()) == FALSE) {
+  install.packages("caret")}
+  if("moments" %in% rownames(installed.packages()) == FALSE) {
+  install.packages("moments")}
+    
+library(readr)
+library(dplyr)
+library(tidyr)
+require(e1071)
+require(caTools)
+require(caret)
+library(class)
+
+```
+
+## Basics 
+### Input, group_by, sum, change column names, merge
+
+1.	How many breweries are present in each state?
+2.	Merge beer data with the breweries data. Print the first 6 observations and the last six observations to check the merged file.  (RMD only, this does not need to be included in the presentation or the deck.)
+
+```{r}
+Breweries <- read_csv("https://raw.githubusercontent.com/BivinSadler/MSDS_6306_Doing-Data-Science/Master/Unit%208%20and%209%20Case%20Study%201/Breweries.csv")
+Beers <- read_csv("https://raw.githubusercontent.com/BivinSadler/MSDS_6306_Doing-Data-Science/Master/Unit%208%20and%209%20Case%20Study%201/Beers.csv", col_types = cols(Beer_ID = col_integer(), 
+    Brewery_id = col_integer()), na = "NA")
+
+# rename columns
+rename(Beers, Brew_ID = Brewery_id,Beer=Name) -> Beers
+rename(Breweries, state = State,Brewery=Name) -> Breweries
+
+# group by state, count breweries in state, order by count and state.
+Q1 <- Breweries %>% group_by(state) %>% summarise(Density = n()) %>% arrange(desc(Density),state)
+
+# merge many to one 
+Q2 <- inner_join(Beers,Breweries,by ="Brew_ID")
+
+head(Q2)
+tail(Q2)
+
+write_csv(Q1,file="StateBrew.csv")
+```
+
+one can use Excel to format the data into a 6 column table for easy display
+
+## Choropleth
+
+> Data is dataframe and must have state code and numerical value
+size = line size, values is column with data to use for colors
+name = name of label and label defines type of label. 
+labs = label or title.
+
+```{r}
+plot_usmap(regions ="state", data = Q1, size=.2, values = "Density") + 
+    scale_fill_continuous( low = "pink", high = "darkred", 
+                         name = "Breweries", label = scales::comma) + 
+  theme(legend.position = "right") +
+  labs(title = "Brewery Density by State") 
+#+   theme(panel.background = element_rect(color = "grey90", fill = "lightblue")) 
+```
+
+
+
+
+### Calculating medians, using group by , dealing with N/A  
+
+```{r}
+medianABV = median(Q2$ABV)
+medianABV
+
+medianABVna = median(Q2$ABV, na.rm = TRUE)
+medianABVna
+
+Q2 %>% group_by(state) %>% 
+  summarize(medianstateABV = median(ABV,na.rm=TRUE),
+            maxstateABV = max(ABV, na.rm=TRUE)) -> StateABV
+StateABV
+
+# sorting
+Q2 %>% arrange(desc(IBU))-> Temp 
+head(Temp,1)
+
+# barcharts (use reorder to change the order of the state (as factor) to match maxstateABV)
+d <- ggplot(StateABV, aes(y=maxstateABV,x=reorder(as.factor(state),maxstateABV)))
+d <- d + geom_col()+ coord_flip() +
+  theme(axis.text = element_text(size = 6)) 
+d
+```
+
+#### scatter plots
+
+```{r}
+plot(StateABV$maxstateABV,StateABV$medianstateABV, col = as.factor(StateABV$state))
+```
+
+### filtering using text strings. 
+
+>**grepl()**: grepl() function will is used to return the value TRUE if the specified string pattern is found in the vector and FALSE if it is not found.
+Syntax: grepl(pattern, string, ignore.case=FALSE)
+
+```{r}
+list = grepl("ale",Q2$Style, ignore.case=TRUE)
+alelist <- Q2 %>% filter(grepl("ale",Style, ignore.case=TRUE) & 
+                           !(grepl("IPA",Style)|grepl("IPA",Beer)))
+IPAlist <- Q2 %>% filter((grepl("IPA",Style)|grepl("IPA",Beer)))
+alelist$type <- "ale"
+IPAlist$type <- "IPA"
+Beerlist <- rbind(alelist,IPAlist)
+KNND <- as.factor(Beerlist$type)
+KNNI <- Beerlist[,c(3,4)]
+```
+
+### Create datasets for KNN analysis (one data.frame with outcomes, a
+second data.frame with the independent variables (ABV and IBU))
+
+
+
+Beers[Beers$ABV>0.12&!is.na(Beers$ABV),]
+Q2[grepl("Bud",Q2$Beer,ignore.case=TRUE),]
+
