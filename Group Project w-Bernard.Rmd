@@ -1,6 +1,6 @@
 ---
-title: "RMD work pack"
-author: "Perfect Presenter"
+title: "DS Group Project w/Bernard"
+author: "Keith and Bernard"
 date: '2022-06-14'
 output: html_document
 ---
